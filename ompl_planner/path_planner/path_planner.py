@@ -14,7 +14,8 @@ class PlannerType(Enum):
 class PathPlanner:
     def __init__(self, state_valid_checker: StateValidityChecker,
                  planner_type: PlannerType,
-                 bounds: tuple[float, float],
+                 low_bound: tuple[float, float, float], 
+                 high_bound: list[float, float, float],
                  start: tuple[float, float, float],
                  goal: tuple[float, float, float],
                  start_quat: tuple[float, float, float, float] = (0, 0, 0, 1),
@@ -24,8 +25,7 @@ class PathPlanner:
         self.space = ob.SE3StateSpace()
 
         self.bounds = ob.RealVectorBounds(3)
-        self.bounds.setLow(bounds[0])
-        self.bounds.setHigh(bounds[1])
+        self.set_bounds(low_bound, high_bound)
 
         self.space.setBounds(self.bounds)
 
@@ -41,7 +41,18 @@ class PathPlanner:
         self.set_start_goal_states()
 
         self.planner = None
+        self.solution_path = None
         self.set_planner(planner_type)
+
+    def set_bounds(self, low_bound: tuple[float, float, float], high_bound: tuple[float, float, float]):
+        self.bounds.setLow(0, low_bound[0])
+        self.bounds.setHigh(0, high_bound[0])
+
+        self.bounds.setLow(1, low_bound[1])
+        self.bounds.setHigh(1, high_bound[1])
+
+        self.bounds.setLow(2, low_bound[2])
+        self.bounds.setHigh(2, high_bound[2])
 
 
     def set_start(self, pos: tuple[float, float, float], quat: tuple[float, float, float, float]):
@@ -76,6 +87,18 @@ class PathPlanner:
     def plan(self, time: float):
         solved = self.simple_setup.solve(time)
         if solved:
-            return self.simple_setup.getSolutionPath()
-        else:
+            self.solution_path = self.simple_setup.getSolutionPath()
+            print("Found solution:", self.solution_path)
+        return solved
+    
+    def get_solution_path(self):
+        return self.solution_path
+
+    def interpolate_path(self, num_points: int):
+        if self.solution_path is None:
             return None
+        return self.solution_path.interpolate(num_points)
+
+if __name__ == "__main__":
+    pathPlanner = PathPlanner(StateValidityChecker(), PlannerType.RRTstar, (-10, -10, -10), (10, 10, 10), (0, 0, 0), (1, 1, 1))
+    pathPlanner.plan(10)
